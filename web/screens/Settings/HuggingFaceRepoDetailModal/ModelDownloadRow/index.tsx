@@ -1,14 +1,11 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback } from 'react'
 
-import {
-  DownloadState,
-  HuggingFaceRepoData,
-  Model,
-  Quantization,
-} from '@janhq/core'
-import { Badge, Button, Progress } from '@janhq/uikit'
+import { DownloadState, HuggingFaceRepoData, Quantization } from '@janhq/core'
+import { Badge, Button, Progress } from '@janhq/joi'
 
 import { useAtomValue, useSetAtom } from 'jotai'
+
+import { twMerge } from 'tailwind-merge'
 
 import { MainViewState } from '@/constants/screens'
 
@@ -18,13 +15,15 @@ import { modelDownloadStateAtom } from '@/hooks/useDownloadState'
 
 import { formatDownloadPercentage, toGibibytes } from '@/utils/converter'
 
+import { normalizeModelId } from '@/utils/model'
+
 import { mainViewStateAtom } from '@/helpers/atoms/App.atom'
 import { assistantsAtom } from '@/helpers/atoms/Assistant.atom'
 
 import { importHuggingFaceModelStageAtom } from '@/helpers/atoms/HuggingFace.atom'
 import {
-  defaultModelAtom,
   downloadedModelsAtom,
+  getDownloadingModelAtom,
 } from '@/helpers/atoms/Model.atom'
 
 type Props = {
@@ -37,7 +36,6 @@ type Props = {
 }
 
 const ModelDownloadRow: React.FC<Props> = ({
-  repoData,
   downloadUrl,
   fileName,
   fileSize = 0,
@@ -47,101 +45,94 @@ const ModelDownloadRow: React.FC<Props> = ({
   const { downloadModel, abortModelDownload } = useDownloadModel()
   const allDownloadStates = useAtomValue(modelDownloadStateAtom)
   const downloadState: DownloadState | undefined = allDownloadStates[fileName]
+  const downloadingModels = useAtomValue(getDownloadingModelAtom)
 
   const { requestCreateNewThread } = useCreateNewThread()
   const setMainViewState = useSetAtom(mainViewStateAtom)
   const assistants = useAtomValue(assistantsAtom)
-  const isDownloaded = downloadedModels.find((md) => md.id === fileName) != null
+  const downloadedModel = downloadedModels.find((md) => md.id === fileName)
+  const isDownloading = downloadingModels.some((md) => md === fileName)
 
   const setHfImportingStage = useSetAtom(importHuggingFaceModelStageAtom)
-  const defaultModel = useAtomValue(defaultModelAtom)
-
-  const model = useMemo(() => {
-    if (!defaultModel) {
-      return undefined
-    }
-
-    const model: Model = {
-      ...defaultModel,
-      sources: [
-        {
-          url: downloadUrl,
-          filename: fileName,
-        },
-      ],
-      id: fileName,
-      name: fileName,
-      created: Date.now(),
-      metadata: {
-        author: 'User',
-        tags: repoData.tags,
-        size: fileSize,
-      },
-    }
-    console.log('NamH model: ', JSON.stringify(model))
-    return model
-  }, [fileName, fileSize, repoData, downloadUrl, defaultModel])
 
   const onAbortDownloadClick = useCallback(() => {
-    if (model) {
-      abortModelDownload(model)
+    if (downloadUrl) {
+      abortModelDownload(normalizeModelId(downloadUrl))
     }
-  }, [model, abortModelDownload])
+  }, [downloadUrl, abortModelDownload])
 
   const onDownloadClick = useCallback(async () => {
-    if (model) {
-      downloadModel(model)
+    if (downloadUrl) {
+      downloadModel(
+        downloadUrl,
+        normalizeModelId(downloadUrl),
+        normalizeModelId(downloadUrl)
+      )
     }
-  }, [model, downloadModel])
+  }, [downloadUrl, downloadModel])
 
   const onUseModelClick = useCallback(async () => {
     if (assistants.length === 0) {
       alert('No assistant available')
       return
     }
-    await requestCreateNewThread(assistants[0], model)
+    await requestCreateNewThread(assistants[0], downloadedModel)
     setMainViewState(MainViewState.Thread)
     setHfImportingStage('NONE')
   }, [
     assistants,
-    model,
+    downloadedModel,
     requestCreateNewThread,
     setMainViewState,
     setHfImportingStage,
   ])
 
-  if (!model) {
+  if (!downloadUrl) {
     return null
   }
 
   return (
-    <div className="flex w-[662px] flex-row items-center justify-between space-x-1 rounded border border-border p-3">
-      <div className="flex">
-        {quantization && <Badge className="mr-1">{quantization}</Badge>}
-
-        <h1 className="mr-5 line-clamp-1 text-sm font-medium text-zinc-500 dark:text-gray-300">
-          {fileName}
-        </h1>
-        <Badge themes="secondary">{toGibibytes(fileSize)}</Badge>
+    <div className="flex flex-col gap-4 rounded border border-[hsla(var(--app-border))] p-3 md:flex-row md:items-center md:justify-between xl:w-full">
+      <div className="flex max-w-[50%] justify-between">
+        <div className="flex min-w-[280px] max-w-[280px]">
+          {quantization && (
+            <Badge variant="soft" className="mr-1">
+              {quantization}
+            </Badge>
+          )}
+          <h1
+            className={twMerge(
+              'mr-5 line-clamp-1 font-medium text-[hsla(var(--text-secondary))]'
+            )}
+            title={fileName}
+          >
+            {fileName}
+          </h1>
+        </div>
+        <div className="md:min-w-[90px] md:max-w-[90px]">
+          <Badge theme="secondary" className="ml-4 hidden md:flex">
+            {toGibibytes(fileSize)}
+          </Badge>
+        </div>
       </div>
 
-      {isDownloaded ? (
+      {downloadedModel ? (
         <Button
-          themes="secondaryBlue"
+          variant="soft"
           className="min-w-[98px]"
           onClick={onUseModelClick}
-          data-testid={`use-model-btn-${model.id}`}
+          data-testid={`use-model-btn-${downloadUrl}`}
         >
           Use
         </Button>
-      ) : downloadState != null ? (
-        <Button themes="secondaryBlue">
+      ) : isDownloading ? (
+        <Button variant="soft">
           <div className="flex items-center space-x-2">
             <span className="inline-block" onClick={onAbortDownloadClick}>
               Cancel
             </span>
             <Progress
-              className="inline-block h-2 w-[80px] bg-blue-100"
+              className="inline-block h-2 w-[80px]"
               value={
                 formatDownloadPercentage(downloadState?.percent, {
                   hidePercentage: true,
@@ -149,7 +140,7 @@ const ModelDownloadRow: React.FC<Props> = ({
               }
             />
             <span className="tabular-nums">
-              {formatDownloadPercentage(downloadState.percent)}
+              {formatDownloadPercentage(downloadState?.percent)}
             </span>
           </div>
         </Button>

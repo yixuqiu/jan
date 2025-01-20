@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react'
 
-import { Modal, ModalContent, ModalHeader, ModalTitle } from '@janhq/uikit'
+import { Modal } from '@janhq/joi'
 import { useAtom } from 'jotai'
 
 import ModelDownloadList from './ModelDownloadList'
@@ -12,7 +12,7 @@ import {
   importingHuggingFaceRepoDataAtom,
 } from '@/helpers/atoms/HuggingFace.atom'
 
-const HuggingFaceRepoDetailModal: React.FC = () => {
+const HuggingFaceRepoDetailModal = () => {
   const [hfImportState, setHfImportState] = useAtom(
     importHuggingFaceModelStageAtom
   )
@@ -33,25 +33,20 @@ const HuggingFaceRepoDetailModal: React.FC = () => {
   if (!importingHuggingFaceRepoData) return null
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange}>
-      <ModalContent className="w-[1162px] max-w-[calc(100%-38px)]">
-        <ModalHeader>
-          <ModalTitle>{importingHuggingFaceRepoData.id}</ModalTitle>
-        </ModalHeader>
-
-        <div className="w-full border border-border" />
-
+    <Modal
+      open={open}
+      onOpenChange={onOpenChange}
+      title={importingHuggingFaceRepoData.id}
+      fullPage
+      content={
         <div className="flex h-full w-full flex-col">
-          <div className="flex">
+          <div className="flex flex-col gap-4 lg:flex-row">
             <ModelSegmentInfo />
-
-            <div className="mx-6 h-full border border-border" />
-
             <ModelDownloadList />
           </div>
         </div>
-      </ModalContent>
-    </Modal>
+      }
+    />
   )
 }
 
